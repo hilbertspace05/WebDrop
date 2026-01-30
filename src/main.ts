@@ -12,6 +12,7 @@ import Header from './components/Header.vue'
 
 import Button from 'buefy/dist/components/button'
 import Checkbox from 'buefy/dist/components/checkbox'
+import Dialog from 'buefy/dist/components/dialog'
 import Field from 'buefy/dist/components/field'
 import Input from 'buefy/dist/components/input'
 import Navbar from 'buefy/dist/components/navbar'
@@ -30,6 +31,7 @@ Vue.use(VueClipboard)
 const comps = [
   Button,
   Checkbox,
+  Dialog,
   Field,
   Input,
   Navbar,
@@ -50,17 +52,19 @@ for (const comp of comps) {
 Vue.component('Header', Header)
 Vue.directive('linkified', linkify)
 
-let announceURLs = [
+// Trackers WebSocket (WSS) para descoberta de peers. Se todos falharem, use um tracker local (ver README).
+const PUBLIC_TRACKERS = [
   'wss://tracker.openwebtorrent.com',
-  'wss://wsswt.herokuapp.com',
+  'wss://tracker.webtorrent.dev',
   'wss://tracker.btorrent.xyz',
-  'wss://tracker.sloppyta.co:443/',
   'wss://tracker.novage.com.ua:443/'
-  // 'ws://192.168.100.7:5000'
 ]
 
-if (window.location.hostname === 'localhost') {
-  announceURLs = ['ws://0.0.0.0:5000']
+let announceURLs = PUBLIC_TRACKERS.slice()
+
+if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+  // Em desenvolvimento: tentar tracker local primeiro (porta 8000 = bittorrent-tracker), depois os públicos
+  announceURLs = ['ws://127.0.0.1:8000', ...PUBLIC_TRACKERS]
 }
 
 const INTERNET_ROOM_CODE_LENGTH = 4

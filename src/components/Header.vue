@@ -6,10 +6,11 @@
           <h1 class="is-size-4">WebDrop</h1>
         </b-navbar-item>
         <div class="actions">
-          <b-tooltip :label="internetShare ? 'Joined An Internet Share Room' : 'Share via Internet'" position="is-bottom" :type="internetShare ? 'is-info' : 'is-primary'">
+          <b-tooltip :label="internetShare ? 'Sala: ' + roomID + ' – Clique para partilhar o código' : 'Sala: ' + roomID + ' – Use o mesmo código no outro dispositivo'" position="is-bottom" :type="internetShare ? 'is-info' : 'is-primary'">
             <b-navbar-item tag="router-link" :to="{ path: '/room' }">
-              <a class="button is-text" v-bind:class="{ 'is-info' : internetShare }" :aria-label="internetShare ? 'Joined An Internet Share Room' : 'Share via Internet'">
+              <a class="button is-text" v-bind:class="{ 'is-info' : internetShare }" :aria-label="'Sala ' + roomID">
                 <earth-icon class="icon is-medium"></earth-icon>
+                <span class="room-code">{{ roomID }}</span>
               </a>
             </b-navbar-item>
           </b-tooltip>
@@ -52,6 +53,9 @@ export default {
   computed: {
     internetShare () {
       return this.$store.state.internetShare
+    },
+    roomID () {
+      return this.$store.state.roomID || '----'
     }
   }
 }
@@ -82,6 +86,11 @@ export default {
 .navbar-item
   background: none
   outline: none
+
+.room-code
+  margin-left: 0.25rem
+  font-weight: bold
+  font-size: 0.9em
 
 .main-navbar .navbar-brand
   width: auto

@@ -34,22 +34,24 @@ Clone the repo and do :
 
 ```
 yarn install
-yarn start
+yarn serve
 ```
 
-WebTorrent trackers list is included in `src/main.ts`. You may want to change that or add/start your [own tracker](https://github.com/subins2000/p2pt/blob/master/startTracker.js) locally for development.
+WebTorrent trackers list is in `src/main.ts`. You can run your own tracker locally (see below).
 
 File is shared via streams using [simple-peer-files library](https://github.com/subins2000/simple-peer-files).
 
-#### Starting Local Tracker
+#### "Nenhum tracker respondeu" / Trackers não conectam
 
-Install [bittorrent-tracker] globally :
+Se a app avisar que não conseguiu ligar a nenhum tracker (rede bloqueada, trackers em baixo, etc.):
 
-```
-yarn global add bittorrent-tracker
-```
+1. **Na mesma WiFi (LAN)** – use um **tracker local** na sua rede:
+   - Instale: `yarn global add bittorrent-tracker` (ou `npm i -g bittorrent-tracker`)
+   - Numa máquina na rede (ex.: o teu PC), execute: `bittorrent-tracker`
+   - Em desenvolvimento (`localhost`), o WebDrop tenta primeiro `ws://127.0.0.1:8000`. Numa máquina execute: `bittorrent-tracker` (porta 8000 por defeito).
+   - Para outros dispositivos na LAN, edite `src/main.ts` e use `ws://IP_DO_PC:8000` (substitua pelo IP da máquina onde corre o tracker).
 
-Download [this script](https://github.com/subins2000/p2pt/blob/master/startTracker.js) and run it. It only requires `bittorrent-tracker`.
+2. **Sem tracker local** – tente outra rede ou VPN; ou introduza manualmente o mesmo código de 4 letras em todos os dispositivos (banner no topo quando a rede não é detectada).
 
 ## Thanks
 

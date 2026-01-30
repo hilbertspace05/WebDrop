@@ -105,8 +105,9 @@
                 <p id="drop-area">Drop your files here or click to upload</p>
               </b-upload>
               <center>
-                <p>Open <a href="https://WebDrop.Space">WebDrop.Space</a> on your devices to join this room. Devices under the same WiFi/network will auto join the same room.</p>
-                <p>Do you want to transfer files over internet ?<br/><earth-icon></earth-icon><br/><router-link to="/room">Share Invite Link or Join Room</router-link></p>
+                <p>Abra o WebDrop nos outros dispositivos (mesma rede) para entrarem na mesma sala.</p>
+                <p>Quer partilhar pela internet? <earth-icon></earth-icon> <router-link to="/room">Sala / Convidar ou entrar com código</router-link></p>
+                <p class="help">Se os dispositivos se virem no separador «Dispositivos» mas o ficheiro não começar a transferir: <router-link to="/settings">Definições</router-link> → marque «Iniciar transferência ao receber».</p>
               </center>
             </template>
           </b-table>
@@ -189,8 +190,9 @@
           </div>
           <p v-show="usersCount === 0">
             <center class="content">
-              <p>Open <a href="https://WebDrop.Space">WebDrop.Space</a> on your devices and make sure they are connected to the same WiFi/network.</p>
-              <p>Do you want to transfer files over internet ?<br/><earth-icon></earth-icon><br/><router-link to="/room">Share Invite Link or Join Room</router-link></p>
+              <p><strong>Nenhum dispositivo ligado.</strong> Para o Android (ou outro dispositivo) receber ficheiros, os dois têm de estar na <strong>mesma sala</strong>.</p>
+              <p>No <strong>PC e no telemóvel</strong>: toque no ícone <earth-icon></earth-icon> <strong>{{ $store.state.roomID || '----' }}</strong> no topo e vá a <router-link to="/room">Sala</router-link>. No telemóvel, escolha «Entrar na sala» e introduza o mesmo código de 4 letras que aparece no PC.</p>
+              <p>Ou, no telemóvel, em Definições → Tracker local, deixe vazio e recarregue (assim usa os trackers públicos; na mesma WiFi costuma dar a mesma sala).</p>
             </center>
           </p>
           <b-field v-for="(user, userID) in users" :key="userID" grouped group-multiline>
@@ -208,8 +210,8 @@
 </template>
 
 <script>
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import AndroidMessagesIcon from 'vue-material-design-icons/AndroidMessages.vue'
-import ArrowUpIcon from 'vue-material-design-icons/ArrowUp.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import DevicesIcon from 'vue-material-design-icons/Devices.vue'
 import EarthIcon from 'vue-material-design-icons/Earth.vue'
@@ -277,7 +279,9 @@ export default {
 
       speed: '0B',
 
-      tableCheckedRows: []
+      tableCheckedRows: [],
+      // Evitar múltiplos downloadShare para o mesmo shareID (enquanto espera fileStart)
+      pendingDownloadShareIDs: {}
     }
   },
 
@@ -384,10 +388,15 @@ export default {
 
     // add new share obtained from a peer
     addNewShare (shareInfo) {
+      if (!shareInfo.shareID && shareInfo.i) shareInfo.shareID = shareInfo.i
       const shareID = shareInfo.shareID
 
       // Will return number if the share is already in list
       const index = this.getIndexOfShare(shareID)
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[WebDrop] addNewShare:', shareInfo.name, 'autoStart:', this.autoStart, 'index:', index)
+      }
 
       if (index === null) {
         shareInfo.paused = !this.autoStart
@@ -396,6 +405,9 @@ export default {
         this.addShareToList(shareInfo, false)
       } else if (this.shares[index].done) {
         // File already completed
+        return
+      } else if (this.$store.state.shares[shareID] && this.$store.state.shares[shareID].transfers.length > 0) {
+        // Já existe transferência ativa para este ficheiro; não iniciar outra
         return
       }
 
@@ -427,15 +439,24 @@ export default {
       }
     },
 
-    // Start downloading
+    // Start downloading (chunked transfer over P2PT)
     downloadShare (shareInfo) {
       const shareID = shareInfo.shareID
       const peer = shareInfo.peer
+      if (this.pendingDownloadShareIDs[shareID]) return
+      this.pendingDownloadShareIDs[shareID] = true
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[WebDrop] downloadShare iniciado:', shareInfo.name, 'shareID:', shareID)
+      }
 
-      this.$pf.receive(peer, shareID).then(transfer => {
-        const share = {
-          file: null,
-          transfer
+      const promise = new Promise((resolve, reject) => {
+        this.$root.$emit('registerChunkedReceive', { shareID, resolve, reject })
+      })
+      this.$store.state.p2pt.send(peer, { type: 'startSending', shareID })
+
+      promise.then(transfer => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[WebDrop] Transferência por chunks ligada')
         }
 
         const index = this.getIndexOfShare(shareID)
@@ -444,10 +465,10 @@ export default {
         let prevProgress = 0
 
         transfer.on('progress', (progress, receivedBytes) => {
-          bytesTransferred += receivedBytes - prevBytes
-          prevBytes = receivedBytes
+          const delta = typeof receivedBytes === 'number' ? receivedBytes - prevBytes : 0
+          prevBytes = typeof receivedBytes === 'number' ? receivedBytes : prevBytes
+          bytesTransferred += delta
 
-          // parseInt will make it single digit
           progress = parseInt(progress)
 
           if (prevProgress !== progress) {
@@ -464,6 +485,7 @@ export default {
           this.$set(this.shares[index], 'done', true)
           this.$set(this.shares[index], 'downloadURL', url)
 
+          this.$delete(this.pendingDownloadShareIDs, shareID)
           this.$store.commit('removeTransfer', {
             shareID,
             userID: transfer.peer._id
@@ -477,10 +499,9 @@ export default {
 
         this.$set(this.shares[index], 'paused', false)
 
-        if (this.$store.state.settings.autoBrowserDownload) {
+        if (this.$store.state.settings.autoBrowserDownload && transfer.createReadStream) {
           const fileStream = transfer.createReadStream()
 
-          // Allows downloading file to browser as file progresses
           streamSaver.WritableStream = ponyfill.WritableStream
           const downloadStream = streamSaver.createWriteStream(shareInfo.name, {
             size: shareInfo.size
@@ -491,11 +512,17 @@ export default {
             .on('data', chunk => writer.write(chunk))
             .on('end', () => writer.close())
         }
-      })
-
-      this.$store.state.p2pt.send(peer, {
-        type: 'startSending',
-        shareID
+      }).catch(err => {
+        this.$delete(this.pendingDownloadShareIDs, shareID)
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[WebDrop] downloadShare falhou:', err)
+        }
+        this.$buefy.toast.open({
+          message: 'Erro ao iniciar transferência. Tente Repor (Resume) ou recarregue.',
+          type: 'is-danger',
+          duration: 5000,
+          position: 'is-bottom'
+        })
       })
     },
 
@@ -516,8 +543,8 @@ export default {
             t.resume()
           })
         } else if (!shareInfo.mine) {
-          // This will be only called in receiver
-          this.downloadShare(shareInfo.shareID)
+          this.$delete(this.pendingDownloadShareIDs, shareInfo.shareID)
+          this.downloadShare(shareInfo)
         }
       }
     },
@@ -640,6 +667,18 @@ export default {
 
         delete data.file
 
+        const userCount = Object.keys(this.$store.state.users).length
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[WebDrop] Enviando newShare a', userCount, 'peer(s):', payload.name)
+        }
+        if (userCount === 0) {
+          this.$buefy.toast.open({
+            message: 'Nenhum dispositivo ligado. Abra o WebDrop no outro dispositivo (mesma rede).',
+            type: 'is-warning',
+            duration: 4000,
+            position: 'is-bottom'
+          })
+        }
         // let peers know of this share
         for (const key in this.$store.state.users) {
           const user = this.$store.state.users[key]

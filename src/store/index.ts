@@ -38,7 +38,8 @@ export default new Vuex.Store({
       defaultTab: 0,
 
       name: '',
-      color: ''
+      color: '',
+      customTrackerUrl: ''
     },
 
     internetShare: false,
@@ -73,6 +74,14 @@ export default new Vuex.Store({
       })
 
       window.localStorage.setItem('settings', JSON.stringify(state.settings))
+    },
+
+    // Atualiza uma única opção (ex.: autoStart em Shares.vue)
+    setting (state, payload) {
+      if (payload && payload.name !== undefined) {
+        Vue.set(state.settings, payload.name, payload.value)
+        window.localStorage.setItem('settings', JSON.stringify(state.settings))
+      }
     },
 
     addUser (state, payload) {
@@ -174,10 +183,11 @@ export default new Vuex.Store({
     },
 
     destroyP2PT (state) {
-      if (state.p2pt !== null) {
+      if (state.p2pt != null && state.p2pt instanceof P2PT) {
         state.p2pt.destroy()
-        state.users = {}
+        state.p2pt = null
       }
+      state.users = {}
     },
 
     addMessage (state, payload) {

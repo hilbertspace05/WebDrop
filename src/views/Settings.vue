@@ -39,6 +39,17 @@
           <b-checkbox v-model="settings.anim">Animations & Transitions</b-checkbox>
         </div>
       </div>
+      <div class="field card card-content">
+        <label class="label">Tracker local (LAN)</label>
+        <div class="control">
+          <b-input
+            v-model="settings.customTrackerUrl"
+            placeholder="ws://192.168.1.1:8000"
+            maxlength="120"
+          />
+        </div>
+        <p class="help">Se aparecer "Nenhum tracker respondeu", use um tracker na sua rede. Numa máquina execute: <code>npx bittorrent-tracker</code> e coloque aqui <code>ws://IP_DA_MAQUINA:8000</code>. Deixe vazio para usar só os trackers públicos. Depois de gravar, recarregue a página ou clique em "Tentar de novo" para usar o novo tracker.</p>
+      </div>
       <div class="field card-content is-grouped" style="justify-content: center;">
         <div class="control">
           <button class="button is-medium is-success" @click="save">Save</button>
